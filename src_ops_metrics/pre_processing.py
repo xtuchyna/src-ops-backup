@@ -78,6 +78,12 @@ def pre_process_project_data(data: Dict[str, Any]):
 
             tfr_per_pr.append((dt_first_review - dt_created).total_seconds() / 3600)
 
+            tfr_in_time.append((dt_created, pr_id, (dt_first_review - dt_created).total_seconds() / 3600, pr["size"]))
+
+            mtfr_in_time.append((dt_created, pr_id, np.median(tfr_per_pr)))
+
+            project_prs_size_encoded.append(convert_score2num(label=pr["size"]))
+
             # Consider all approved reviews
             pr_approved_dt = [
                 datetime.fromtimestamp(review["submitted_at"])
@@ -93,19 +99,6 @@ def pre_process_project_data(data: Dict[str, Any]):
 
                 ttr_in_time.append((dt_created, pr_id, (dt_approved - dt_created).total_seconds() / 3600, pr["size"]))
                 mttr_in_time.append((dt_created, pr_id, np.median(ttr_per_pr)))
-
-            else:
-                dt_merged = datetime.fromtimestamp(pr["merged_at"])
-                ttr_per_pr.append((dt_merged - dt_created).total_seconds() / 3600)
-
-                ttr_in_time.append((dt_created, pr_id, (dt_merged - dt_created).total_seconds() / 3600, pr["size"]))
-                mttr_in_time.append((dt_created, pr_id, np.median(ttr_per_pr)))
-
-            tfr_in_time.append((dt_created, pr_id, (dt_first_review - dt_created).total_seconds() / 3600, pr["size"]))
-
-            mtfr_in_time.append((dt_created, pr_id, np.median(tfr_per_pr)))
-
-            project_prs_size_encoded.append(convert_score2num(label=pr["size"]))
 
             time_reviews += dt_all_reviews
 
@@ -128,7 +121,7 @@ def pre_process_project_data(data: Dict[str, Any]):
     return project_reviews_data
 
 
-def pre_process_contributors_data(data: Dict[str, Any]):
+def pre_process_contributors_data(data: Dict[str, Any], contributors: List[str]):
     """Pre process of data for contributors in a project repository."""
     pr_ids = sorted([int(k) for k in data.keys()])
 
@@ -145,8 +138,14 @@ def pre_process_contributors_data(data: Dict[str, Any]):
     tfr_in_time = {}  # TTFR in time [hr]
     ttr_in_time = {}  # TTR in time [hr]
 
+    interactions = {}
+    for contributor in contributors:
+        contributor_interaction = dict.fromkeys(contributors, 0)
+        interactions[contributor] = contributor_interaction
+
     for pr_id in pr_ids:
         pr = data[str(pr_id)]
+
         if pr["reviews"]:
             dt_created = datetime.fromtimestamp(pr["created_at"])
 
@@ -197,6 +196,10 @@ def pre_process_contributors_data(data: Dict[str, Any]):
                     else:
                         review_info_per_reviewer[review["author"]].append(review["submitted_at"])
 
+                    if review["author"] in interactions[pr["created_by"]].keys():
+                        if review["author"] in pr["interactions"].keys():
+                            interactions[pr["created_by"]][review["author"]] += pr["interactions"][review["author"]]
+
             for reviewer, reviewer_info in review_info_per_reviewer.items():
                 dt_first_review = datetime.fromtimestamp(reviewer_info[0])
 
@@ -210,6 +213,16 @@ def pre_process_contributors_data(data: Dict[str, Any]):
                     tfr_in_time[reviewer].append(
                         (dt_created, pr_id, (dt_first_review - dt_created).total_seconds() / 3600, pr["size"])
                     )
+
+                if reviewer not in mtfr_in_time.keys():
+                    mtfr_in_time[reviewer] = [(dt_created, pr_id, np.median(tfr_per_pr[reviewer]))]
+                else:
+                    mtfr_in_time[reviewer].append((dt_created, pr_id, np.median(tfr_per_pr[reviewer])))
+
+                if reviewer not in pr_length.keys():
+                    pr_length[reviewer] = [pr["size"]]
+                else:
+                    pr_length[reviewer].append(pr["size"])
 
                 dt_approved = [
                     datetime.fromtimestamp(review["submitted_at"])
@@ -232,17 +245,10 @@ def pre_process_contributors_data(data: Dict[str, Any]):
                             (dt_created, pr_id, (dt_approved[0] - dt_created).total_seconds() / 3600, pr["size"])
                         )
 
-                if reviewer not in mtfr_in_time.keys():
-                    mtfr_in_time[reviewer] = [(dt_created, pr_id, np.median(tfr_per_pr[reviewer]))]
-                    mttr_in_time[reviewer] = [(dt_created, pr_id, np.median(ttr_per_pr[reviewer]))]
-                else:
-                    mtfr_in_time[reviewer].append((dt_created, pr_id, np.median(tfr_per_pr[reviewer])))
-                    mttr_in_time[reviewer].append((dt_created, pr_id, np.median(ttr_per_pr[reviewer])))
-
-                if reviewer not in pr_length.keys():
-                    pr_length[reviewer] = [pr["size"]]
-                else:
-                    pr_length[reviewer] = pr["size"]
+                    if reviewer not in mttr_in_time.keys():
+                        mttr_in_time[reviewer] = [(dt_created, pr_id, np.median(ttr_per_pr[reviewer]))]
+                    else:
+                        mttr_in_time[reviewer].append((dt_created, pr_id, np.median(ttr_per_pr[reviewer])))
 
     for reviewer in contributors_reviews_data.keys():
 
@@ -266,7 +272,11 @@ def pre_process_contributors_data(data: Dict[str, Any]):
         contributors_reviews_data[reviewer]["last_review_time"] = last_review_dt
 
         # Encode Pull Request sizes for the contributor
-        contributor_prs_size_encoded = [convert_score2num(label=pr_size) for pr_size in pr_length[reviewer]]
+        if len(pr_length[reviewer]) > 1:
+            contributor_prs_size_encoded = [convert_score2num(label=pr_size) for pr_size in pr_length[reviewer]]
+        else:
+            contributor_prs_size_encoded = convert_score2num(label=pr_length[reviewer])
+
         contributor_pr_median_size, contributor_relative_score = convert_num2label(
             score=np.median(contributor_prs_size_encoded)
         )

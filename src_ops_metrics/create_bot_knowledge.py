@@ -324,9 +324,12 @@ def store_pull_request(pull_request: PullRequest, results: Dict[str, Dict[str, A
     labels = [label.name for label in pull_request.get_labels()]
 
     # Evaluate size of PR
+    pull_request_size = None
+
     if labels:
         pull_request_size = get_labeled_size(labels)
-    else:
+
+    if not pull_request_size:
         lines_changes = pull_request.additions + pull_request.deletions
         pull_request_size = assign_pull_request_size(lines_changes=lines_changes)
 
