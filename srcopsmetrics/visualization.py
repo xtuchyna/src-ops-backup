@@ -26,10 +26,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from utils import check_directory
-from utils import convert_num2label, convert_score2num
-from pre_processing import retrieve_knowledge
-from pre_processing import pre_process_project_data
+from .utils import check_directory
+from .utils import convert_num2label, convert_score2num
+from .pre_processing import retrieve_knowledge
+from .pre_processing import pre_process_project_data
 
 
 _LOGGER = logging.getLogger(__name__)

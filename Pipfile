@@ -8,12 +8,14 @@ numpy = "*"
 pygithub = "*"
 matplotlib = "*"
 pandas = "*"
+thoth-storages = "*"
 
 [dev-packages]
 pytest = "*"
 pytest-timeout = "*"
 pytest-cov = "*"
 coala-bears = "*"
+pycodestyle = "*"
 
 [requires]
 python_version = "3.6"

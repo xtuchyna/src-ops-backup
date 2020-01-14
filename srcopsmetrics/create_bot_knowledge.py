@@ -24,10 +24,12 @@ import json
 from typing import List, Tuple, Dict, Optional, Union, Set, Any, Sequence
 from pathlib import Path
 
-from utils import check_directory, assign_pull_request_size
+from .utils import check_directory, assign_pull_request_size
 
 from github import Github, GithubObject, Issue, IssueComment, PullRequest, PullRequestReview, PaginatedList
 from github.Repository import Repository
+
+from thoth.storages.ceph import CephStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,9 +37,21 @@ _GITHUB_ACCESS_TOKEN = os.getenv("GITHUB_ACCESS_TOKEN")
 
 ISSUE_KEYWORDS = {"close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"}
 
-
 STANDALONE_LABELS = {"size"}
 
+USE_CEPH_STORAGE = False
+
+PREFIX = 'data/thoth/dtuchyna/'
+HOST = 'https://s3.upshift.redhat.com/'
+# env variables needed for ceph connection
+# THOTH_CEPH_KEY_ID =
+# THOTH_SECRET_KEY = 
+BUCKET = 'DH-DEV-DATA'
+
+def get_ceph_store() -> CephStore:
+    s3 = CephStore(prefix=PREFIX, host=HOST, bucket=BUCKET)
+    s3.connect()
+    return s3
 
 def connect_to_source(project: Tuple[str, str]) -> Repository:
     """Connect to GitHub.
@@ -160,7 +174,6 @@ def load_previous_knowledge(project_name: str, repo_path: Path, knowledge_type: 
 
     return results
 
-
 def save_knowledge(file_path: Path, data: Dict[str, Any]):
     """Save collected knowledge as json.
 
@@ -173,9 +186,18 @@ def save_knowledge(file_path: Path, data: Dict[str, Any]):
     """
     results = {"results": data}
 
-    with open(file_path, "w") as f:
-        json.dump(results, f)
-    _LOGGER.info("Saved new knowledge file %s of size %d" % (os.path.basename(file_path), len(data)))
+    _LOGGER.info("Saving knowledge file %s of size %d" % (os.path.basename(file_path), len(data)))
+    
+    if USE_CEPH_STORAGE:
+        ceph_filename = os.path.relpath(file_path).replace('./', '')
+        s3 = get_ceph_store()
+        s3.store_document(results, ceph_filename)
+        _LOGGER.info("Saved on CEPH at %s%s%s" % (s3.bucket, s3.prefix, ceph_filename))
+    else:
+        with open(file_path, "w") as f:
+            json.dump(results, f)
+        _LOGGER.info("Saved locally at %s" % file_path)
+    
 
 
 def get_interactions(comments):
@@ -388,7 +410,7 @@ def analyse_projects(projects: List[Tuple[str, str]]) -> None:
     Arguments:
         projects {List[Tuple[str, str]]} -- one tuple should be in format (project_name, repository_name)
     """
-    path = Path.cwd().joinpath("./src_ops_metrics/Bot_Knowledge")
+    path = Path.cwd().joinpath("./srcopsmetrics/bot_knowledge")
     for project in projects:
         github_repo = connect_to_source(project=project)
 

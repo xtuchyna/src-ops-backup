@@ -1,0 +1,6 @@
+{
+    "python.linting.pylintEnabled": false,
+    "python.linting.pycodestyleEnabled": true,
+    "python.linting.enabled": true,
+    "python.pythonPath": "/home/xtuchyna/.local/share/virtualenvs/SrcOpsMetrics-1-GbMJDBE9/bin/python"
+}
